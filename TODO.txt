@@ -1,0 +1,6 @@
+TODO : 
+1) prendre en compte la negation pour les ensembles (rxSet)
+2) Corriger le comportement du contenu d’un ensemble (rxCharsSet) : 
+   doit calculer [ab-d] comme a | b | c | d et non a | b | - | d 
+
+Refaire donc la gestion des ensembles 

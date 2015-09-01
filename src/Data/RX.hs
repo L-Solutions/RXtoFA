@@ -9,7 +9,7 @@ import           Data.Foldable
 import           Data.Monoid
 import           Data.Traversable
 
-import           Data.Char                   (digitToInt, chr)
+import           Data.Char                   (chr, digitToInt)
 import           Data.Maybe                  (maybeToList)
 import           Data.Set                    (Set)
 import qualified Data.Set                    as S
@@ -18,10 +18,12 @@ import           Data.Tree
 import           Text.Parsec.ByteString.Lazy (Parser, parseFromFile)
 import           Text.Parsec.Char            (char, digit, lower, noneOf, oneOf,
                                               spaces, string, upper)
-import           Text.Parsec.Combinator      (between, chainl, chainl1, lookAhead,
-                                              many1, option, optionMaybe)
+import           Text.Parsec.Combinator      (between, chainl, chainl1,
+                                              lookAhead, many1, option,
+                                              optionMaybe)
 import           Text.Parsec.Prim
 
+import           Prelude                     hiding (concat)
 
 data RX a = RXEmpty
           | RXToken a
@@ -153,38 +155,38 @@ rxSpecial = char '\\' >> oneOf rxSpecialChars >>= return . RXToken
 
 rxSet :: RXParser
 rxSet = do char '['
-           --  negation <- optionMaybe $ char '^' -- TODO prendre en compte la negation
-           content <- rxSetContent
+           --  negation <- optionMaybe $ char '^' {- TODO prendre en compte la negation -}
+           content <- rxCharsSet
            char ']'
            return content
  where
-    rxCreateSet :: Parser Char -> RXParser
+    rxCreateSet :: Parser Char -> Parser [Char]
     rxCreateSet p = do start <- p
                        char '-'
                        end <- p
-                       return $ RXChoice $ fmap RXToken [start..end]
+                       return [start..end]
 
-    rxSetContent :: RXParser
+    rxSetContent :: Parser [Char]
     rxSetContent = try rxDigitSet
                    <|> try rxUpperSet
                    <|> try rxLowerSet
-                   <|>  rxCharsSet
 
-    rxUpperSet :: RXParser
+    rxUpperSet :: Parser [Char]
     rxUpperSet = withClosingBracket $ rxCreateSet upper
 
-    rxLowerSet :: RXParser
+    rxLowerSet :: Parser [Char]
     rxLowerSet = withClosingBracket $ rxCreateSet lower
 
-    rxDigitSet :: RXParser
+    rxDigitSet :: Parser [Char]
     rxDigitSet = withClosingBracket $ rxCreateSet digit
 
     rxCharsSet :: RXParser
     rxCharsSet = do head <- liftM maybeToList $ optionMaybe (char ']')
-                    set <- many1 noClosingBracket
-                    return $ RXChoice [ RXToken x | x <- head ++ set ]
+                    set <- many1 (rxSetContent <|> many1 noClosingBracket) -- TODO ne fait pas correctement [ab-z]
+                    return $ RXChoice [ RXToken x | x <- head ++ concat set ]
 
     noClosingBracket = noneOf "]"
+
     closingBracket = char ']'
 
     withClosingBracket p = p `followedBy` closingBracket
@@ -220,7 +222,7 @@ rxChoice :: RXParser
 rxChoice = try $ do spaces
                     rxl <- rxSeq
                     spaces
-                    rxr <- chainl (rxChoiceOp >> rxSeq) (return (+++)) rxl 
+                    rxr <- chainl (rxChoiceOp >> rxSeq) (return (+++)) rxl
                     if (rxl == rxr)
                     then return rxl
                     else return $ rxl +++ rxr
